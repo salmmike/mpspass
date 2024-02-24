@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+age = "0.10.0"
+base64 = "0.21.7"
 clap = { version = "4.4.17", features = ["derive"] }
 home = "0.5.9"
-magic-crypt = "3.1.13"
 rand = "0.8.5"
 rpassword = "7.3.1"
 rusqlite = "0.31.0"

@@ -195,20 +195,24 @@ impl MPSPass {
         self.db.add_password(name, hash, salt)
     }
 
-    fn get_passwd(&self, args: &input::Args) -> String {
+    fn get_passwd(&self, args: &input::Args) -> Result<String, String> {
         let name = input::input_name(&args);
         let key = self.get_master_key(&args);
         if key.is_err() {
-            return key.err().unwrap();
+            return Err(key.err().unwrap());
         }
         let res = self.db.get_value(name.clone());
         if res.is_err() {
-            return "Can't find password for ".to_string() + name.as_str();
+            return Err("Can't find password for ".to_string() + name.as_str());
         }
 
         let values = res.unwrap();
 
-        encryption::decrypt(&values.hash, &values.salt, key.unwrap())
+        Ok(encryption::decrypt(
+            &values.hash,
+            &values.salt,
+            key.unwrap(),
+        ))
     }
 
     fn list_passwords(&self) {
@@ -237,7 +241,7 @@ fn main() {
             println!("{}", res.err().unwrap());
         }
     } else if args.show {
-        println!("{}", vault.get_passwd(&args));
+        println!("{}", vault.get_passwd(&args).unwrap());
     } else if args.add {
         let _ = vault.add_password(&args);
     } else if args.list {
@@ -293,7 +297,7 @@ mod tests {
             generate: false,
         };
         let res = vault.get_passwd(&args);
-        assert_eq!(res, String::from("test-passwd"));
+        assert_eq!(res, Ok(String::from("test-passwd")));
         let _ = fs::remove_file("./test.db");
     }
 }

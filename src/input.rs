@@ -32,6 +32,10 @@ pub struct Args {
     #[arg(short, long, default_value_t = String::new())]
     pub name: String,
 
+    /// Master password
+    #[arg(short, long, default_value_t = String::new())]
+    pub master: String,
+
     /// Generate password for name
     #[arg(short, long, default_value_t = false)]
     pub generate: bool,
@@ -58,6 +62,9 @@ pub fn check_overwrite(name: &String) -> bool {
 /// Get password from CLI or from arguments.
 pub fn input_passwd(is_new: bool, args: &Args) -> Result<String, String> {
     if !is_new {
+        if !args.master.is_empty() {
+            return Ok(args.master.clone());
+        }
         print!("Master password: ");
         std::io::stdout().flush().unwrap();
         let password = read_password().unwrap();

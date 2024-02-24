@@ -6,7 +6,6 @@ use std::str;
 mod encryption;
 mod input;
 
-
 fn get_db_path() -> String {
     home_dir().unwrap().to_str().unwrap().to_string() + "/.mpspasswd.db"
 }
@@ -19,21 +18,19 @@ struct HashSalt {
 }
 
 struct MPSDb {
-    db_path: String
+    db_path: String,
 }
 
 impl MPSDb {
     pub fn new(path: String) -> MPSDb {
-        MPSDb {
-            db_path: path,
-        }
+        MPSDb { db_path: path }
     }
 
     fn get_connection(&self) -> Result<Connection, rusqlite::Error> {
         Connection::open(self.db_path.clone())
     }
 
-    pub fn create_table(&self)  -> Result<String, String> {
+    pub fn create_table(&self) -> Result<String, String> {
         let connection = self.get_connection();
 
         if connection.is_err() {
@@ -103,7 +100,6 @@ impl MPSDb {
         Ok("Password added to database".to_string())
     }
 
-
     fn check_exists(&self, name: &String) -> bool {
         let values = self.get_values().unwrap();
         for val in values {
@@ -116,7 +112,7 @@ impl MPSDb {
 }
 
 struct MPSPass {
-    db: MPSDb
+    db: MPSDb,
 }
 
 impl MPSPass {
@@ -132,7 +128,7 @@ impl MPSPass {
     }
 
     fn create_master_entry(&self, args: &input::Args) -> Result<String, String> {
-        self.db.create_table()?; 
+        self.db.create_table()?;
 
         let salt: String = input::create_random(16);
 
@@ -146,7 +142,9 @@ impl MPSPass {
         }
 
         let enc_master_passwd: String = encryption::encrypt(&pass.clone(), &salt, pass.to_owned());
-        let res = self.db.add_password("master".to_string(), enc_master_passwd, salt);
+        let res = self
+            .db
+            .add_password("master".to_string(), enc_master_passwd, salt);
         if res.is_err() {
             return res;
         }
@@ -154,7 +152,9 @@ impl MPSPass {
         let salt = input::create_random(32);
         let master_key = input::create_random(64);
         let enc_master_key: String = encryption::encrypt(&master_key, &salt, pass);
-        let res = self.db.add_password("master-key".to_string(), enc_master_key, salt);
+        let res = self
+            .db
+            .add_password("master-key".to_string(), enc_master_key, salt);
         if res.is_err() {
             return res;
         }
@@ -182,7 +182,6 @@ impl MPSPass {
             passwd,
         ));
     }
-
 
     fn add_password(&self, args: &input::Args) -> Result<String, String> {
         let name = input::input_name(&args);
@@ -224,7 +223,6 @@ impl MPSPass {
             }
         }
     }
-
 }
 
 fn main() {
@@ -249,3 +247,53 @@ fn main() {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_basics() {
+        let args = input::Args {
+            list: false,
+            init: true,
+            add: false,
+            show: false,
+            master: String::new(),
+            name: String::new(),
+            passwd: String::from("master-passwd"),
+            generate: false,
+        };
+
+        let vault = MPSPass::with_db_path("./test.db".to_string());
+        let res = vault.create_master_entry(&args);
+        assert!(res.is_ok());
+
+        let args = input::Args {
+            list: false,
+            init: true,
+            add: true,
+            show: false,
+            master: String::from("master-passwd"),
+            name: String::from("test-entry"),
+            passwd: String::from("test-passwd"),
+            generate: false,
+        };
+        let res = vault.add_password(&args);
+        assert!(res.is_ok());
+
+        let args = input::Args {
+            list: false,
+            init: true,
+            add: false,
+            show: true,
+            master: String::from("master-passwd"),
+            name: String::from("test-entry"),
+            passwd: String::new(),
+            generate: false,
+        };
+        let res = vault.get_passwd(&args);
+        assert_eq!(res, String::from("test-passwd"));
+        let _ = fs::remove_file("./test.db");
+    }
+}

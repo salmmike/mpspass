@@ -1,77 +1,18 @@
-use clap::Parser;
-use magic_crypt::{new_magic_crypt, MagicCryptTrait};
-use rand::{distributions::Alphanumeric, Rng};
-use rpassword::read_password;
-use rusqlite::{Connection, Result};
-use std::io::Write;
-use std::str;
 use home::home_dir;
+use rand::{distributions::Alphanumeric, Rng};
+use rusqlite::{Connection, Result};
+use std::str;
 
-/// TOY CLI password manager.
-/// Assume the passwords are in clear text and sent to a public server.
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// List passwords
-    #[arg(short, long, default_value_t = false)]
-    list: bool,
+use clap::Parser;
 
-    /// Initialize password manager
-    #[arg(short, long, default_value_t = false)]
-    init: bool,
-
-    /// Add password
-    #[arg(short, long, default_value_t = false, requires_all=["name"])]
-    add: bool,
-
-    /// Show password
-    #[arg(short, long, default_value_t = false, requires_all=["name"])]
-    show: bool,
-
-    /// Value for password
-    #[arg(short, long, default_value_t = String::new())]
-    passwd: String,
-
-    /// Name of password
-    #[arg(short, long, default_value_t = String::new())]
-    name: String,
-
-    /// Generate password for name
-    #[arg(short, long, default_value_t = false, requires_all=["name"])]
-    generate: bool,
-}
+mod encryption;
+mod input;
 
 #[derive(Debug)]
 struct HashSalt {
     name: String,
     hash: String,
     salt: String,
-}
-
-fn input_passwd(is_new: bool, args: &Args) -> Result<String, String> {
-    if !is_new {
-        print!("Master password: ");
-        std::io::stdout().flush().unwrap();
-        let password = read_password().unwrap();
-        return Ok(password);
-    }
-
-    if !args.passwd.is_empty() {
-        return Ok(args.passwd.clone());
-    }
-
-    print!("Type password: ");
-    std::io::stdout().flush().unwrap();
-    let password = read_password().unwrap();
-    println!("");
-    print!("Retype password: ");
-    std::io::stdout().flush().unwrap();
-    let retype = read_password().unwrap();
-    if password == retype {
-        return Ok(password);
-    }
-
-    Err("Passwords don't match".to_string())
 }
 
 fn get_db_path() -> String {
@@ -87,29 +28,7 @@ fn create_random(len: usize) -> String {
     return s;
 }
 
-fn do_salt(input: String, salt: String) -> String {
-    input + salt.as_str()
-}
-
-fn encrypt(input: &String, salt: &String, key: String) -> String {
-    let to_crypt = do_salt(input.clone(), salt.clone());
-    let mcrypt = new_magic_crypt!(key.as_str(), 256);
-    mcrypt.encrypt_str_to_base64(to_crypt.as_str())
-}
-
-fn decrypt(hash: &String, salt: &String, key: String) -> String {
-    let mcrypt = new_magic_crypt!(key.as_str(), 256);
-    let res = mcrypt.decrypt_base64_to_string(hash.as_str());
-
-    if res.is_err() {
-        return "Failed to decrypt".to_string();
-    }
-    let mut out = res.unwrap();
-    out.drain(out.len() - salt.len()..out.len());
-    out
-}
-
-fn create_master_entry(args: &Args) -> Result<String, String> {
+fn create_master_entry(args: &input::Args) -> Result<String, String> {
     let connection = Connection::open(get_db_path());
     if connection.is_err() {
         return Err("Failed to connect to database".to_string());
@@ -124,16 +43,16 @@ fn create_master_entry(args: &Args) -> Result<String, String> {
 
     let salt: String = create_random(16);
 
-    let mut pass = String::new();
+    let pass: String;
 
     if args.passwd.is_empty() {
         println!("Creating master password.");
-        pass = input_passwd(true, args).unwrap();
+        pass = input::input_passwd(true, args).unwrap();
     } else {
         pass = args.passwd.clone();
     }
 
-    let enc_master_passwd: String = encrypt(&pass.clone(), &salt, pass.clone());
+    let enc_master_passwd: String = encryption::encrypt(&pass.clone(), &salt, pass.to_owned());
     let res = db_add_password("master".to_string(), enc_master_passwd, salt);
     if res.is_err() {
         return res;
@@ -141,7 +60,7 @@ fn create_master_entry(args: &Args) -> Result<String, String> {
 
     let salt = create_random(32);
     let master_key = create_random(64);
-    let enc_master_key: String = encrypt(&master_key, &salt, pass);
+    let enc_master_key: String = encryption::encrypt(&master_key, &salt, pass);
     let res = db_add_password("master-key".to_string(), enc_master_key, salt);
     if res.is_err() {
         return res;
@@ -149,16 +68,8 @@ fn create_master_entry(args: &Args) -> Result<String, String> {
     Ok("Master record created".to_string())
 }
 
-fn get_name(args: &Args) -> String {
-    if !args.name.is_empty() {
-        return args.name.clone();
-    }
-
-    String::new()
-}
-
-fn get_master_key(args: &Args) -> Result<String, String> {
-    let passwd = input_passwd(false, &args).unwrap();
+fn get_master_key(args: &input::Args) -> Result<String, String> {
+    let passwd = input::input_passwd(false, &args).unwrap();
     let res = get_value("master".to_string());
     if res.is_err() {
         return Err("Can't find master password".to_string());
@@ -166,13 +77,17 @@ fn get_master_key(args: &Args) -> Result<String, String> {
 
     let mp_values = res.unwrap();
 
-    let m_passwd = decrypt(&mp_values.hash, &mp_values.salt, passwd.clone());
+    let m_passwd = encryption::decrypt(&mp_values.hash, &mp_values.salt, passwd.clone());
     if passwd != m_passwd {
         return Err("Incorrect master password.".to_string());
     }
 
     let mk_values: HashSalt = get_value("master-key".to_string()).unwrap();
-    return Ok(decrypt(&mk_values.hash, &mk_values.salt, passwd));
+    return Ok(encryption::decrypt(
+        &mk_values.hash,
+        &mk_values.salt,
+        passwd,
+    ));
 }
 
 fn db_add_password(name: String, hash: String, salt: String) -> Result<String, String> {
@@ -191,20 +106,20 @@ fn db_add_password(name: String, hash: String, salt: String) -> Result<String, S
     Ok("Password added to database".to_string())
 }
 
-fn add_password(args: &Args) -> Result<String, String> {
-    let name = get_name(&args);
+fn add_password(args: &input::Args) -> Result<String, String> {
+    let name = input::input_name(&args);
     let key = get_master_key(&args)?;
 
-    let passwd = input_passwd(true, &args).unwrap();
+    let passwd = input::input_passwd(true, &args).unwrap();
 
     let salt = create_random(32);
-    let hash = encrypt(&passwd, &salt, key);
+    let hash = encryption::encrypt(&passwd, &salt, key);
 
     db_add_password(name, hash, salt)
 }
 
-fn get_passwd(args: &Args) -> String {
-    let name = get_name(&args);
+fn get_passwd(args: &input::Args) -> String {
+    let name = input::input_name(&args);
     let key = get_master_key(&args);
     if key.is_err() {
         return key.err().unwrap();
@@ -216,7 +131,7 @@ fn get_passwd(args: &Args) -> String {
 
     let values = res.unwrap();
 
-    decrypt(&values.hash, &values.salt, key.unwrap())
+    encryption::decrypt(&values.hash, &values.salt, key.unwrap())
 }
 
 fn get_values() -> Result<Vec<HashSalt>> {
@@ -268,7 +183,7 @@ fn get_value(name: String) -> Result<HashSalt> {
 }
 
 fn main() {
-    let args: Args = Args::parse();
+    let args: input::Args = input::Args::parse();
     println!("This is a toy, not a real password manager.");
     println!("All data is sent to a public server in clear text!");
     println!("(not really, but treat it as it was)");

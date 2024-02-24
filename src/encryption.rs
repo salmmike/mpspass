@@ -1,14 +1,22 @@
 use age::secrecy::Secret;
 use base64::{engine::general_purpose, Engine as _};
+use pbkdf2::pbkdf2_hmac_array;
+use sha2::Sha256;
 use std::io::{Read, Write};
 
-fn do_salt(input: String, salt: String) -> String {
-    input + salt.as_str()
+fn do_salt(input: &String, salt: &String) -> String {
+    input.clone() + salt.as_str()
+}
+
+fn do_pbkdf2(key: String, salt: String) -> String {
+    general_purpose::STANDARD
+        .encode(pbkdf2_hmac_array::<Sha256, 64>(key.as_bytes(), salt.as_bytes(), 100_000).to_vec())
 }
 
 // Encrypts a string using a salt. Data returned as base64 encoded String
-pub fn encrypt(input: &String, salt: &String, key: String) -> String {
-    let to_crypt = do_salt(input.to_string(), salt.to_string());
+pub fn encrypt(input: &String, salt: &String, mut key: String) -> String {
+    key = do_pbkdf2(key.clone(), salt.clone());
+    let to_crypt = do_salt(input, salt);
 
     let encrypted = {
         let encryptor = age::Encryptor::with_user_passphrase(Secret::new(key.as_str().to_owned()));
@@ -28,7 +36,8 @@ pub fn encrypt(input: &String, salt: &String, key: String) -> String {
 }
 
 // Decrypts a base64 encoded String
-pub fn decrypt(hash: &String, salt: &String, key: String) -> String {
+pub fn decrypt(hash: &String, salt: &String, mut key: String) -> String {
+    key = do_pbkdf2(key.clone(), salt.clone());
     let encrypted = general_purpose::STANDARD.decode(&hash).unwrap();
 
     let decrypted = {

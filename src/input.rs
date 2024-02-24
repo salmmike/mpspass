@@ -47,7 +47,7 @@ pub fn create_random(len: usize) -> String {
 }
 
 pub fn check_overwrite(name: &String) -> bool {
-    print!("Entry {} exists. Overwrite? (y/N):", name);
+    print!("Entry {} exists. Overwrite? (y/N): ", name);
     std::io::stdout().flush().unwrap();
 
     let mut input: String = String::new();
@@ -88,11 +88,10 @@ pub fn input_passwd(is_new: bool, args: &Args) -> Result<String, String> {
 
 fn rm_newline(name: String) -> String {
     name.strip_suffix("\r\n")
-    .or(name.strip_suffix("\n"))
-    .unwrap_or(name.as_str());
+        .or(name.strip_suffix("\n"))
+        .unwrap_or(name.as_str());
 
     name.to_string()
-
 }
 
 /// Get name from arguments or from CLI.

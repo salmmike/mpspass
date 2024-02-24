@@ -80,7 +80,6 @@ fn get_master_key(args: &input::Args) -> Result<String, String> {
 }
 
 fn check_exists(name: &String) -> bool {
-
     let values = get_values().unwrap();
     for val in values {
         if val.name.eq(name) {
@@ -91,8 +90,8 @@ fn check_exists(name: &String) -> bool {
 }
 
 fn db_add_password(name: String, hash: String, salt: String) -> Result<String, String> {
-    if check_exists(&name) && ! input::check_overwrite(&name) {
-        return  Err("Entry exists".to_string());
+    if check_exists(&name) && !input::check_overwrite(&name) {
+        return Err("Entry exists".to_string());
     }
 
     let connection = Connection::open(get_db_path());

@@ -1,8 +1,6 @@
 use home::home_dir;
-use rand::{distributions::Alphanumeric, Rng};
 use rusqlite::{Connection, Result};
 use std::str;
-
 use clap::Parser;
 
 mod encryption;
@@ -19,15 +17,6 @@ fn get_db_path() -> String {
     home_dir().unwrap().to_str().unwrap().to_string() + "/.mpspasswd.db"
 }
 
-fn create_random(len: usize) -> String {
-    let s = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect();
-    return s;
-}
-
 fn create_master_entry(args: &input::Args) -> Result<String, String> {
     let connection = Connection::open(get_db_path());
     if connection.is_err() {
@@ -41,7 +30,7 @@ fn create_master_entry(args: &input::Args) -> Result<String, String> {
         return Err("Failed to execute SQL command".to_string());
     }
 
-    let salt: String = create_random(16);
+    let salt: String = input::create_random(16);
 
     let pass: String;
 
@@ -58,8 +47,8 @@ fn create_master_entry(args: &input::Args) -> Result<String, String> {
         return res;
     }
 
-    let salt = create_random(32);
-    let master_key = create_random(64);
+    let salt = input::create_random(32);
+    let master_key = input::create_random(64);
     let enc_master_key: String = encryption::encrypt(&master_key, &salt, pass);
     let res = db_add_password("master-key".to_string(), enc_master_key, salt);
     if res.is_err() {
@@ -112,7 +101,7 @@ fn add_password(args: &input::Args) -> Result<String, String> {
 
     let passwd = input::input_passwd(true, &args).unwrap();
 
-    let salt = create_random(32);
+    let salt = input::create_random(32);
     let hash = encryption::encrypt(&passwd, &salt, key);
 
     db_add_password(name, hash, salt)

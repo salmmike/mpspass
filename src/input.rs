@@ -1,6 +1,7 @@
 use clap::Parser;
 use rpassword::read_password;
 use std::io::{self, Write};
+use rand::{distributions::Alphanumeric, Rng};
 
 /// TOY CLI password manager.
 /// Assume the passwords are in clear text and sent to a public server.
@@ -16,11 +17,11 @@ pub struct Args {
     pub init: bool,
 
     /// Add password
-    #[arg(short, long, default_value_t = false, requires_all=["name"])]
+    #[arg(short, long, default_value_t = false)]
     pub add: bool,
 
     /// Show password
-    #[arg(short, long, default_value_t = false, requires_all=["name"])]
+    #[arg(short, long, default_value_t = false)]
     pub show: bool,
 
     /// Value for password
@@ -32,8 +33,18 @@ pub struct Args {
     pub name: String,
 
     /// Generate password for name
-    #[arg(short, long, default_value_t = false, requires_all=["name"])]
+    #[arg(short, long, default_value_t = false)]
     pub generate: bool,
+}
+
+
+pub fn create_random(len: usize) -> String {
+    let s = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(len)
+        .map(char::from)
+        .collect();
+    return s;
 }
 
 /// Get password from CLI or from arguments.
@@ -47,6 +58,10 @@ pub fn input_passwd(is_new: bool, args: &Args) -> Result<String, String> {
 
     if !args.passwd.is_empty() {
         return Ok(args.passwd.clone());
+    }
+
+    if args.generate {
+        return Ok(create_random(32));
     }
 
     print!("Type password: ");

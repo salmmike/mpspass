@@ -1,7 +1,7 @@
 use clap::Parser;
+use rand::{distributions::Alphanumeric, Rng};
 use rpassword::read_password;
 use std::io::{self, Write};
-use rand::{distributions::Alphanumeric, Rng};
 
 /// TOY CLI password manager.
 /// Assume the passwords are in clear text and sent to a public server.
@@ -37,7 +37,6 @@ pub struct Args {
     pub generate: bool,
 }
 
-
 pub fn create_random(len: usize) -> String {
     let s = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -45,6 +44,15 @@ pub fn create_random(len: usize) -> String {
         .map(char::from)
         .collect();
     return s;
+}
+
+pub fn check_overwrite(name: &String) -> bool {
+    print!("Entry {} exists. Overwrite? (y/N):", name);
+    std::io::stdout().flush().unwrap();
+
+    let mut input: String = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input.starts_with('y')
 }
 
 /// Get password from CLI or from arguments.
@@ -78,15 +86,24 @@ pub fn input_passwd(is_new: bool, args: &Args) -> Result<String, String> {
     Err("Passwords don't match".to_string())
 }
 
+fn rm_newline(name: String) -> String {
+    name.strip_suffix("\r\n")
+    .or(name.strip_suffix("\n"))
+    .unwrap_or(name.as_str());
+
+    name.to_string()
+
+}
+
 /// Get name from arguments or from CLI.
 pub fn input_name(args: &Args) -> String {
     if !args.name.is_empty() {
-        return args.name.clone();
+        return rm_newline(args.name.clone());
     }
 
     print!("Name: ");
     std::io::stdout().flush().unwrap();
     let mut name: String = String::new();
     io::stdin().read_line(&mut name).unwrap();
-    name
+    rm_newline(name)
 }

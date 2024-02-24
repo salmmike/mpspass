@@ -1,7 +1,7 @@
+use clap::Parser;
 use home::home_dir;
 use rusqlite::{Connection, Result};
 use std::str;
-use clap::Parser;
 
 mod encryption;
 mod input;
@@ -79,12 +79,27 @@ fn get_master_key(args: &input::Args) -> Result<String, String> {
     ));
 }
 
+fn check_exists(name: &String) -> bool {
+
+    let values = get_values().unwrap();
+    for val in values {
+        if val.name.eq(name) {
+            return true;
+        }
+    }
+    return false;
+}
+
 fn db_add_password(name: String, hash: String, salt: String) -> Result<String, String> {
+    if check_exists(&name) && ! input::check_overwrite(&name) {
+        return  Err("Entry exists".to_string());
+    }
+
     let connection = Connection::open(get_db_path());
     if connection.is_err() {
         return Err("Failed to open database".to_string());
     }
-    let command: &str = "INSERT INTO manager (name, hash, salt) VALUES(?, ?, ?);";
+    let command: &str = "REPLACE INTO manager (name, hash, salt) VALUES(?, ?, ?);";
 
     let res = connection
         .unwrap()
